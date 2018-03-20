@@ -1,0 +1,3 @@
+sfue_paypal_homepage:
+    path:     /paypal/notification
+    defaults: { _controller: SfuePayPalExpressCheckoutBundle:Notification:index }

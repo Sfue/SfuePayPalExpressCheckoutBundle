@@ -1,0 +1,10 @@
+services:
+    sfue_pay_pal.handler:
+        class: Sfue\PayPalExpressCheckoutBundle\Service\PayPalHandler
+        arguments:
+            - '%sfue.paypal.merchant_email%'
+            - '%sfue.paypal.user_name%'
+            - '%sfue.paypal.password%'
+            - '%sfue.paypal.signature%'
+            - '%sfue.paypal.sandbox%'
+            - '%sfue.paypal.default_currency%'
