@@ -1,6 +1,8 @@
 <?php
 
 namespace Sfue\PayPalExpressCheckoutBundle\Data;
+use PayPal\EBLBaseComponents\PayerInfoType;
+use PayPal\PayPalAPI\DoExpressCheckoutPaymentResponseType;
 
 /**
  * Class PayPalCheckoutFinalizeResponse
@@ -8,32 +10,52 @@ namespace Sfue\PayPalExpressCheckoutBundle\Data;
  */
 class PayPalCheckoutFinalizeResponse
 {
-    /** @var string */
-    protected $token;
-    /** @var string */
-    protected $transactionId;
+    /** @var DoExpressCheckoutPaymentResponseType */
+    protected $response;
+
+    /** @var PayerInfoType */
+    protected $payerInfo;
+
+    /** @var \DateTime */
+    protected $date;
 
     /**
      * PayPalCheckoutFinalizeResponse constructor.
-     * @param string $token
-     * @param string $transactionId
+     * @param DoExpressCheckoutPaymentResponseType $response
+     * @param PayerInfoType $payerInfo
      */
-    public function __construct($token, $transactionId) {
-        $this->token = $token;
-        $this->transactionId = $transactionId;
+    public function __construct(DoExpressCheckoutPaymentResponseType $response, PayerInfoType $payerInfo) {
+        $this->response = $response;
+        $this->payerInfo = $payerInfo;
+
+        $this->date = new \DateTime($response->Timestamp);
     }
 
     /**
      * @return string
      */
     public function getToken() {
-        return $this->token;
+        return $this->response->DoExpressCheckoutPaymentResponseDetails->Token;
     }
 
     /**
      * @return string
      */
     public function getTransactionId() {
-        return $this->transactionId;
+        return $this->response->DoExpressCheckoutPaymentResponseDetails->PaymentInfo[0]->TransactionID;
+    }
+
+    /**
+     * @return string
+     */
+    public function getPayerId() {
+        return $this->payerInfo->PayerID;
+    }
+
+    /**
+     * @return \DateTime
+     */
+    public function getDate() {
+        return $this->date;
     }
 }

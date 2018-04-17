@@ -2,6 +2,7 @@
 
 namespace Sfue\PayPalExpressCheckoutBundle\Service;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Sfue\PayPalExpressCheckoutBundle\Data\PayPalCheckoutDetails;
 use Sfue\PayPalExpressCheckoutBundle\Data\PayPalCheckoutFinalizeResponse;
 use Sfue\PayPalExpressCheckoutBundle\Data\PayPalCheckoutOrder;
@@ -21,6 +22,7 @@ use PayPal\PayPalAPI\GetExpressCheckoutDetailsRequestType;
 use PayPal\PayPalAPI\SetExpressCheckoutReq;
 use PayPal\PayPalAPI\SetExpressCheckoutRequestType;
 use PayPal\Service\PayPalAPIInterfaceServiceService;
+use Sfue\PayPalExpressCheckoutBundle\Model\PayPalCheckoutOrderInterface;
 
 /**
  * Class PayPalhandler
@@ -42,6 +44,8 @@ class PayPalHandler
     protected $defaultCurrency;
     /** @var  PayPalAPIInterfaceServiceService */
     protected $apiInterface;
+    /** @var EntityManagerInterface */
+    protected $em;
 
     /**
      * PayPal constructor.
@@ -51,19 +55,22 @@ class PayPalHandler
      * @param string $signature
      * @param bool $sandbox
      * @param $defaultCurrency
+     * @param EntityManagerInterface $em
      */
     public function __construct($merchantEmail,
                                 $userName,
                                 $password,
                                 $signature,
                                 $sandbox = false,
-                                $defaultCurrency) {
+                                $defaultCurrency,
+                                EntityManagerInterface $em) {
         $this->merchantEmail = $merchantEmail;
         $this->userName = $userName;
         $this->password = $password;
         $this->signature = $signature;
         $this->sandbox = $sandbox;
         $this->defaultCurrency = $defaultCurrency;
+        $this->em = $em;
     }
 
     /**
@@ -115,42 +122,50 @@ class PayPalHandler
     }
 
     /**
-     * @param string $token
+     * @param PayPalCheckoutDetails $checkoutDetails
      * @param null $invoiceId
+     * @return PayPalCheckoutFinalizeResponse
      * @throws \Exception
      */
-    public function finalizeCheckout($token, $invoiceId = null) {
-        $checkoutDetails = $this->getCheckoutDetails($token);
+    public function finalizeCheckout(PayPalCheckoutDetails $checkoutDetails, $invoiceId = null) {
+        if($invoiceId) {
+            $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->PaymentDetails[0]->InvoiceID = $invoiceId;
+        }
 
-        if($checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->CheckoutStatus == 'PaymentActionNotInitiated') {
-            if($invoiceId) {
-                $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->PaymentDetails[0]->InvoiceID = $invoiceId;
-            }
+        $finalCheckoutDetails = new DoExpressCheckoutPaymentRequestDetailsType();
+        $finalCheckoutDetails->PayerID = $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->PayerInfo->PayerID;
+        $finalCheckoutDetails->Token = $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->Token;
+        $finalCheckoutDetails->PaymentAction = 'Sale';
+        $finalCheckoutDetails->PaymentDetails[0] = $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->PaymentDetails[0];
 
-            $finalCheckoutDetails = new DoExpressCheckoutPaymentRequestDetailsType();
-            $finalCheckoutDetails->PayerID = $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->PayerInfo->PayerID;
-            $finalCheckoutDetails->Token = $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->Token;
-            $finalCheckoutDetails->PaymentAction = 'Sale';
-            $finalCheckoutDetails->PaymentDetails[0] = $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->PaymentDetails[0];
+        $ecFinalRequest = new DoExpressCheckoutPaymentRequestType($finalCheckoutDetails);
 
-            $ecFinalRequest = new DoExpressCheckoutPaymentRequestType($finalCheckoutDetails);
+        $DoECReq = new DoExpressCheckoutPaymentReq();
+        $DoECReq->DoExpressCheckoutPaymentRequest = $ecFinalRequest;
 
-            $DoECReq = new DoExpressCheckoutPaymentReq();
-            $DoECReq->DoExpressCheckoutPaymentRequest = $ecFinalRequest;
+        $paypalApiInterface = $this->getApiInterface();
 
-            $paypalApiInterface = $this->getApiInterface();
+        $paypalResponse = $paypalApiInterface->DoExpressCheckoutPayment($DoECReq);
+        $response = new PayPalCheckoutFinalizeResponse($paypalResponse, $checkoutDetails->getDetails()->GetExpressCheckoutDetailsResponseDetails->PayerInfo);
 
-            $paypalResponse = $paypalApiInterface->DoExpressCheckoutPayment($DoECReq);
-            dump($paypalResponse);
-            $response = new PayPalCheckoutFinalizeResponse($paypalResponse->DoExpressCheckoutPaymentResponseDetails->Token, $paypalResponse->DoExpressCheckoutPaymentResponseDetails->PaymentInfo[0]->TransactionID);
+        return $response;
+    }
 
-            // @todo add error
-            return $response;
-        } else {
-            $response = new PayPalCheckoutFinalizeResponse($checkoutDetails->getToken(), $checkoutDetails->getTransactionId());
+    /**
+     * @param PayPalCheckoutFinalizeResponse $finalResponse
+     * @param PayPalCheckoutOrderInterface $order
+     * @param bool $flush
+     */
+    public function updateOrderAfterPaymentFinalize(PayPalCheckoutFinalizeResponse $finalResponse, PayPalCheckoutOrderInterface $order, $flush = true) {
+        $order->setPaypalPayerId($finalResponse->getPayerId());
+        $order->setPaypalCheckoutToken($finalResponse->getToken());
+        $order->setPaidAt($finalResponse->getDate());
+        $order->setPaypalTransactionId($finalResponse->getTransactionId());
+        $order->setPaid(true);
 
-            // @todo add error
-            return $response;
+        if($flush) {
+            $this->em->persist($order);
+            $this->em->flush();
         }
     }
 

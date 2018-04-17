@@ -8,3 +8,4 @@ services:
             - '%sfue.paypal.signature%'
             - '%sfue.paypal.sandbox%'
             - '%sfue.paypal.default_currency%'
+            - '@doctrine.orm.entity_manager'
