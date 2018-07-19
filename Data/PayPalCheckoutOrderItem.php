@@ -62,14 +62,14 @@ class PayPalCheckoutOrderItem
      * Calculates the item tax value
      */
     protected function calculateTaxValue() {
-        $this->taxValue = \round($this->getSinglePrice() * ($this->getTax() / 100), 2);
+        $this->taxValue = \round($this->getSinglePrice() - ($this->getSinglePrice() / (1 + $this->getTax() / 100)), 2);
     }
 
     /**
      * Calculates the item tax total value
      */
     protected function calculateTaxTotalValue() {
-        $this->taxTotalValue = \round($this->getSinglePrice() * $this->getQuantity() * ($this->getTax() / 100), 2);
+        $this->taxTotalValue = \round(($this->getSinglePrice() * $this->getQuantity()) - ($this->getSinglePrice() * $this->getQuantity() / (1 + $this->getTax() / 100)), 2);
     }
 
     /**
@@ -83,7 +83,7 @@ class PayPalCheckoutOrderItem
      * Calculates the item net value
      */
     protected function calculateNetValue() {
-        $this->netValue = \round($this->getSinglePrice() - ($this->getSinglePrice() * ($this->getTax() / 100)), 2);
+        $this->netValue = \round(($this->getSinglePrice() / (1 + $this->getTax() / 100)), 2);
     }
 
     /**
